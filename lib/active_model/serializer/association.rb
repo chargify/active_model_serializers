@@ -1,5 +1,6 @@
 require 'active_model/default_serializer'
 require 'active_model/serializer/association/has_one'
+require 'active_model/serializer/association/memoized_has_one'
 require 'active_model/serializer/association/has_many'
 
 module ActiveModel

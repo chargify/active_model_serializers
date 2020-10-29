@@ -5,8 +5,7 @@ module ActiveModel
 
       def _const_get(const)
         begin
-          method = RUBY_VERSION >= '2.0' ? :const_get : :qualified_const_get
-          Object.send method, const
+          Object.const_get(const)
         rescue NameError
           const.safe_constantize
         end

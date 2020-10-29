@@ -4,7 +4,6 @@ require 'active_model/serializer/association'
 require 'active_model/serializer/config'
 
 require 'thread'
-require 'concurrent/map'
 
 module ActiveModel
   class Serializer
@@ -67,7 +66,9 @@ end
           end
         else
           klass_name = build_serializer_class(resource, options)
-          Serializer.serializers_cache.fetch_or_store(klass_name) do
+          return nil if klass_name == "StringSerializer"
+
+          Serializer.serializers_cache.fetch(klass_name) do
             _const_get(klass_name)
           end
         end
@@ -100,12 +101,16 @@ end
         associate(Association::HasOne, *attrs)
       end
 
+      def memoized_has_one(*attrs)
+        associate(Association::MemoizedHasOne, *attrs)
+      end
+
       def has_many(*attrs)
         associate(Association::HasMany, *attrs)
       end
 
       def serializers_cache
-        @serializers_cache ||= Concurrent::Map.new
+        RequestStore[:serializers_cache] ||= {}
       end
 
       private
@@ -133,6 +138,12 @@ end
           define_method attr do
             object.send attr
           end unless method_defined?(attr)
+
+          if klass == Association::MemoizedHasOne
+            define_method "#{attr}_id" do
+              object.send("#{attr}_id")
+            end
+          end
 
           @_associations[attr] = klass.new(attr, options)
         end
@@ -188,7 +199,22 @@ end
             if association.embed_namespace?
               hash = hash[association.embed_namespace] ||= {}
             end
-            hash[association.embedded_key] = serialize association, options
+
+            # scope needs to be passed because memoization only makes sense in context of collections
+            if association.instance_of?(Association::MemoizedHasOne) # && scope.key?(:use_memoized)
+              RequestStore[:ams] ||= {}
+              RequestStore[:ams][association.name] ||= {}
+
+              association_id = send("#{association.name}_id")
+
+              unless RequestStore[:ams][association.name].key?(association_id)
+                RequestStore[:ams][association.name][association_id] = serialize association, options
+              end
+
+              hash[association.embedded_key] = RequestStore[:ams][association.name][association_id]
+            else
+              hash[association.embedded_key] = serialize association, options
+            end
           end
         end
       end

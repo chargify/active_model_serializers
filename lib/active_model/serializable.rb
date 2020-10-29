@@ -34,7 +34,7 @@ module ActiveModel
 
     def namespace
       if module_name = get_namespace
-        Serializer.serializers_cache.fetch_or_store(module_name) do
+        Serializer.serializers_cache.fetch(module_name) do
           Utils._const_get(module_name)
         end
       end
